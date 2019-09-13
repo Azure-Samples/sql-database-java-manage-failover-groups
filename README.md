@@ -4,9 +4,8 @@ languages:
 - java
 products:
 - azure
-extensions:
-- services: Sql
-- platforms: java
+description: "Getting Started with Sql - Manage Sql Failover Groups - in Java"
+urlFragment: sql-database-java-manage-failover-groups
 ---
 
 # Getting Started with Sql - Manage Sql Failover Groups - in Java #
