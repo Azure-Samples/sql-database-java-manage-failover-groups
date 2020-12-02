@@ -1,28 +1,23 @@
-/**
- * Copyright (c) Microsoft Corporation. All rights reserved.
- * Licensed under the MIT License. See License.txt in the project root for
- * license information.
- */
-package com.microsoft.azure.management.sql.samples;
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT License.
+package com.azure.resourcemanager.sql.samples;
 
-import com.microsoft.azure.AzureEnvironment;
-import com.microsoft.azure.AzureResponseBuilder;
-import com.microsoft.azure.credentials.ApplicationTokenCredentials;
-import com.microsoft.azure.management.Azure;
-import com.microsoft.azure.management.resources.fluentcore.arm.Region;
-import com.microsoft.azure.management.resources.fluentcore.utils.SdkContext;
-import com.microsoft.azure.management.samples.Utils;
-import com.microsoft.azure.management.sql.SampleName;
-import com.microsoft.azure.management.sql.SqlDatabase;
-import com.microsoft.azure.management.sql.SqlDatabaseStandardServiceObjective;
-import com.microsoft.azure.management.sql.SqlFailoverGroup;
-import com.microsoft.azure.management.sql.SqlServer;
-import com.microsoft.azure.serializer.AzureJacksonAdapter;
-import com.microsoft.rest.LogLevel;
-import com.microsoft.rest.RestClient;
+import com.azure.core.credential.TokenCredential;
+import com.azure.core.http.policy.HttpLogDetailLevel;
+import com.azure.core.management.AzureEnvironment;
+import com.azure.identity.DefaultAzureCredentialBuilder;
+import com.azure.resourcemanager.AzureResourceManager;
+import com.azure.core.management.Region;
+import com.azure.core.management.profile.AzureProfile;
+import com.azure.resourcemanager.resources.fluentcore.utils.ResourceManagerUtils;
+import com.azure.resourcemanager.samples.Utils;
+import com.azure.resourcemanager.sql.models.SampleName;
+import com.azure.resourcemanager.sql.models.SqlDatabase;
+import com.azure.resourcemanager.sql.models.SqlDatabaseStandardServiceObjective;
+import com.azure.resourcemanager.sql.models.SqlFailoverGroup;
+import com.azure.resourcemanager.sql.models.SqlServer;
 
-import java.io.File;
-import java.util.concurrent.TimeUnit;
+import java.time.Duration;
 
 /**
  * Azure SQL sample for managing SQL Failover Groups
@@ -36,18 +31,17 @@ import java.util.concurrent.TimeUnit;
 public class ManageSqlFailoverGroups {
     /**
      * Main function which runs the actual sample.
-     * @param azure instance of the azure client
+     * @param azureResourceManager instance of the azure client
      * @return true if sample runs successfully
      */
-    public static boolean runSample(Azure azure) {
-        final String sqlPrimaryServerName = Utils.createRandomName("sqlpri");
-        final String sqlSecondaryServerName = Utils.createRandomName("sqlsec");
-        final String rgName = Utils.createRandomName("rgsql");
-        final String failoverGroupName = Utils.createRandomName("fog");
+    public static boolean runSample(AzureResourceManager azureResourceManager) {
+        final String sqlPrimaryServerName = Utils.randomResourceName(azureResourceManager, "sqlpri", 20);
+        final String sqlSecondaryServerName = Utils.randomResourceName(azureResourceManager, "sqlsec", 20);
+        final String rgName = Utils.randomResourceName(azureResourceManager, "rgsql", 20);
+        final String failoverGroupName = Utils.randomResourceName(azureResourceManager, "fog", 20);
         final String dbName = "dbSample";
         final String administratorLogin = "sqladmin3423";
-        // [SuppressMessage("Microsoft.Security", "CS002:SecretInNextLine", Justification="Serves as an example, not for deployment. Please change when using this in your code.")]
-        final String administratorPassword = "myS3cureP@ssword";
+        final String administratorPassword = Utils.password();
 
         try {
 
@@ -55,7 +49,7 @@ public class ManageSqlFailoverGroups {
             // Create a primary SQL Server with a sample database.
             System.out.println("Creating a primary SQL Server with a sample database");
 
-            SqlServer sqlPrimaryServer = azure.sqlServers().define(sqlPrimaryServerName)
+            SqlServer sqlPrimaryServer = azureResourceManager.sqlServers().define(sqlPrimaryServerName)
                 .withRegion(Region.US_EAST)
                 .withNewResourceGroup(rgName)
                 .withAdministratorLogin(administratorLogin)
@@ -72,7 +66,7 @@ public class ManageSqlFailoverGroups {
             // Create a secondary SQL Server with a sample database.
             System.out.println("Creating a secondary SQL Server with a sample database");
 
-            SqlServer sqlSecondaryServer = azure.sqlServers().define(sqlSecondaryServerName)
+            SqlServer sqlSecondaryServer = azureResourceManager.sqlServers().define(sqlSecondaryServerName)
                 .withRegion(Region.US_EAST2)
                 .withExistingResourceGroup(rgName)
                 .withAdministratorLogin(administratorLogin)
@@ -98,7 +92,7 @@ public class ManageSqlFailoverGroups {
             // Get the Failover Group from the secondary SQL server.
             System.out.println("Getting the Failover Group from the secondary SQL server");
 
-            SqlFailoverGroup failoverGroupOnPartner = sqlSecondaryServer.failoverGroups().get(failoverGroup.name());
+            sqlSecondaryServer.failoverGroups().get(failoverGroup.name());
 
             Utils.print(failoverGroup);
 
@@ -144,7 +138,7 @@ public class ManageSqlFailoverGroups {
             // ============================================================
             // Get the database from the secondary SQL server.
             System.out.println("Getting the database from the secondary server");
-            SdkContext.sleep(3 * 60 * 1000);
+            ResourceManagerUtils.sleep(Duration.ofMinutes(3));
 
             db = sqlSecondaryServer.databases().get(dbName);
 
@@ -160,23 +154,18 @@ public class ManageSqlFailoverGroups {
 
             // Delete the SQL Servers.
             System.out.println("Deleting the Sql Servers");
-            azure.sqlServers().deleteById(sqlPrimaryServer.id());
-            azure.sqlServers().deleteById(sqlSecondaryServer.id());
+            azureResourceManager.sqlServers().deleteById(sqlPrimaryServer.id());
+            azureResourceManager.sqlServers().deleteById(sqlSecondaryServer.id());
             return true;
-        } catch (Exception f) {
-            System.out.println(f.getMessage());
-            f.printStackTrace();
         } finally {
             try {
                 System.out.println("Deleting Resource Group: " + rgName);
-                azure.resourceGroups().deleteByName(rgName);
+                azureResourceManager.resourceGroups().beginDeleteByName(rgName);
                 System.out.println("Deleted Resource Group: " + rgName);
-            }
-            catch (Exception e) {
+            } catch (Exception e) {
                 System.out.println("Did not create any resources in Azure. No clean up is necessary");
             }
         }
-        return false;
     }
 
     /**
@@ -185,23 +174,21 @@ public class ManageSqlFailoverGroups {
      */
     public static void main(String[] args) {
         try {
-            final File credFile = new File(System.getenv("AZURE_AUTH_LOCATION"));
+            final AzureProfile profile = new AzureProfile(AzureEnvironment.AZURE);
+            final TokenCredential credential = new DefaultAzureCredentialBuilder()
+                .authorityHost(profile.getEnvironment().getActiveDirectoryEndpoint())
+                .build();
 
-
-            ApplicationTokenCredentials credentials = ApplicationTokenCredentials.fromFile(credFile);
-            RestClient restClient = new RestClient.Builder()
-                .withBaseUrl(AzureEnvironment.AZURE, AzureEnvironment.Endpoint.RESOURCE_MANAGER)
-                .withSerializerAdapter(new AzureJacksonAdapter())
-                .withResponseBuilderFactory(new AzureResponseBuilder.Factory())
-                .withReadTimeout(150, TimeUnit.SECONDS)
-                .withLogLevel(LogLevel.BODY)
-                .withCredentials(credentials).build();
-            Azure azure = Azure.authenticate(restClient, credentials.domain(), credentials.defaultSubscriptionId()).withDefaultSubscription();
+            AzureResourceManager azureResourceManager = AzureResourceManager
+                .configure()
+                .withLogLevel(HttpLogDetailLevel.BASIC)
+                .authenticate(credential, profile)
+                .withDefaultSubscription();
 
             // Print selected subscription
-            System.out.println("Selected subscription: " + azure.subscriptionId());
+            System.out.println("Selected subscription: " + azureResourceManager.subscriptionId());
 
-            runSample(azure);
+            runSample(azureResourceManager);
         } catch (Exception e) {
             System.out.println(e.getMessage());
             e.printStackTrace();
